@@ -91,60 +91,113 @@ def total_vertical_grf(r: Rollout) -> np.ndarray:
 def yaw_rate_error(r: Rollout) -> np.ndarray:
     """RMS yaw rate tracking error of each robot, in rad/s. Shape (N,)."""
     # TODO: use yaw_rate_error_per_step
-    raise NotImplementedError
+    # OUR: Take the root mean square of each robot's yaw rate error over time.
+    error = yaw_rate_error_per_step(r)
+    return np.sqrt(np.mean(error**2, axis=1))
 
 
 def cost_of_transport(r: Rollout) -> np.ndarray:
     """Mechanical cost of transport of each robot:
     mean power / (m g mean horizontal speed). Dimensionless. Shape (N,)."""
     # TODO: use mechanical_power and body_weight
-    raise NotImplementedError
+    # OUR: Normalize mean power by weight times mean speed; zero speed is undefined.
+    mean_power = np.mean(mechanical_power(r), axis=1)
+    mean_speed = np.mean(np.linalg.norm(r.base_lin_vel[..., :2], axis=-1), axis=1)
+    denominator = body_weight(r) * mean_speed
+    return np.divide(
+        mean_power,
+        denominator,
+        out=np.full_like(mean_power, np.nan),
+        where=denominator > 0,
+    )
 
 
 def duty_factor(r: Rollout) -> np.ndarray:
     """Fraction of time the feet are on the ground, averaged over the four
     feet (> 0.5 walk, < 0.5 trot/run). Shape (N,)."""
     # TODO
-    raise NotImplementedError
+    # OUR: Average the contact indicators over time and all four feet.
+    return np.mean(r.foot_contact, axis=(1, 2))
 
 
 def stride_frequency(r: Rollout) -> np.ndarray:
     """Strides per second of each robot: 1 / mean time between two
     touchdowns of the same foot, averaged over the feet. Shape (N,)."""
     # TODO: use touchdowns
-    raise NotImplementedError
+    # OUR: Average inverse mean touchdown intervals over feet with at least two touchdowns.
+    frequency = np.full(r.num_robots, np.nan)
+    for robot in range(r.num_robots):
+        foot_frequencies = []
+        for foot in range(r.foot_contact.shape[2]):
+            steps = touchdowns(r.foot_contact[robot, :, foot])
+            if steps.size >= 2:
+                foot_frequencies.append(1.0 / (np.mean(np.diff(steps)) * r.dt))
+        if foot_frequencies:
+            frequency[robot] = np.mean(foot_frequencies)
+    return frequency
 
 
 def stride_length(r: Rollout) -> np.ndarray:
     """Distance travelled per stride: mean horizontal speed / stride frequency, in m. Shape (N,)."""
     # TODO: use stride_frequency
-    raise NotImplementedError
+    # OUR: Divide mean horizontal speed by stride frequency when strides are available.
+    mean_speed = np.mean(np.linalg.norm(r.base_lin_vel[..., :2], axis=-1), axis=1)
+    frequency = stride_frequency(r)
+    return np.divide(
+        mean_speed,
+        frequency,
+        out=np.full_like(mean_speed, np.nan),
+        where=frequency > 0,
+    )
 
 
 def foot_clearance(r: Rollout) -> np.ndarray:
     """Mean over swing phases of the maximum foot height above the ground,
     in m (flat ground only). Shape (N,)."""
     # TODO: use phases(..., stance=False) and FOOT_RADIUS
-    raise NotImplementedError
+    # OUR: Average complete swing peaks above the foot radius; missing swings stay NaN.
+    clearance = np.full(r.num_robots, np.nan)
+    for robot in range(r.num_robots):
+        peaks = []
+        for foot in range(r.foot_contact.shape[2]):
+            for start, end in phases(r.foot_contact[robot, :, foot], stance=False):
+                peaks.append(np.max(r.foot_height[robot, start:end, foot]) - FOOT_RADIUS)
+        if peaks:
+            clearance[robot] = np.mean(peaks)
+    return clearance
 
 
 def peak_vertical_grf(r: Rollout) -> np.ndarray:
     """Mean over stance phases of the peak vertical GRF, in body weights. Shape (N,)."""
     # TODO: use phases(..., stance=True) and body_weight
-    raise NotImplementedError
+    # OUR: Average complete stance force peaks and normalize by each robot's body weight.
+    peak_force = np.full(r.num_robots, np.nan)
+    weight = body_weight(r)
+    for robot in range(r.num_robots):
+        peaks = []
+        for foot in range(r.foot_contact.shape[2]):
+            for start, end in phases(r.foot_contact[robot, :, foot], stance=True):
+                peaks.append(np.max(r.foot_grf[robot, start:end, foot, 2]))
+        if peaks:
+            peak_force[robot] = np.mean(peaks) / weight[robot]
+    return peak_force
 
 
 def weight_support(r: Rollout) -> np.ndarray:
     """Mean total vertical GRF in body weights. About 1 for steady walking
     (sanity check of the force measurement). Shape (N,)."""
     # TODO: use total_vertical_grf
-    raise NotImplementedError
+    # OUR: Average the total force in body weights over each robot's rollout.
+    return np.mean(total_vertical_grf(r), axis=1)
 
 
 def action_rate(r: Rollout) -> np.ndarray:
     """Mean norm of the change in action between two control steps. Shape (N,)."""
     # TODO
-    raise NotImplementedError
+    # OUR: Average consecutive action change norms; fewer than two steps is undefined.
+    if r.action.shape[1] < 2:
+        return np.full(r.num_robots, np.nan)
+    return np.mean(np.linalg.norm(np.diff(r.action, axis=1), axis=-1), axis=1)
 
 
 # TODO: add your own metrics, following the same convention (per step: (N, T),
