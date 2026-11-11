@@ -1,0 +1,13 @@
+[project]
+name = "lr-project"
+version = "0.1.0"
+description = "Deep-reinforcement learning project for the 2026 Legged Robots Course"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Louis Gevers", email = "louis.gevers@epfl.ch" }]
+requires-python = ">=3.12.11"
+dependencies = ["mjlab==1.6.0", "torch==2.9.1"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
