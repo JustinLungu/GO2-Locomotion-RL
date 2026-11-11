@@ -67,8 +67,8 @@ def lin_vel_error(r: Rollout) -> np.ndarray:
 
 def yaw_rate_error_per_step(r: Rollout) -> np.ndarray:
     """Absolute yaw rate tracking error at each step, in rad/s. Shape (N, T)."""
-    # TODO
-    raise NotImplementedError
+    # OUR: Broadcast each robot's commanded yaw rate over time and take the absolute error.
+    return np.abs(r.base_ang_vel[..., 2] - r.cmd[:, None, 2])
 
 
 def mechanical_power(r: Rollout) -> np.ndarray:
