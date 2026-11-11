@@ -73,14 +73,14 @@ def yaw_rate_error_per_step(r: Rollout) -> np.ndarray:
 
 def mechanical_power(r: Rollout) -> np.ndarray:
     """Sum over joints of |torque * joint velocity| at each step, in W. Shape (N, T)."""
-    # TODO
-    raise NotImplementedError
+    # OUR: Sum the absolute torque times velocity across joints at each step.
+    return np.sum(np.abs(r.joint_torque * r.joint_vel), axis=-1)
 
 
 def total_vertical_grf(r: Rollout) -> np.ndarray:
     """Sum of the vertical GRF of the four feet at each step, in body weights. Shape (N, T)."""
-    # TODO
-    raise NotImplementedError
+    # OUR: Sum vertical foot forces and normalize by each robot's body weight.
+    return np.sum(r.foot_grf[..., 2], axis=-1) / body_weight(r)[:, None]
 
 
 #############################
