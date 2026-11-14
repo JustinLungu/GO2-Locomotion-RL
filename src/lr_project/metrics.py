@@ -80,7 +80,8 @@ def mechanical_power(r: Rollout) -> np.ndarray:
 def total_vertical_grf(r: Rollout) -> np.ndarray:
     """Sum of the vertical GRF of the four feet at each step, in body weights. Shape (N, T)."""
     # OUR: Sum vertical foot forces and normalize by each robot's body weight.
-    return np.sum(r.foot_grf[..., 2], axis=-1) / body_weight(r)[:, None]
+    # The sensor gives the force of the foot on the ground (negative z), so flip the sign.
+    return -np.sum(r.foot_grf[..., 2], axis=-1) / body_weight(r)[:, None]
 
 
 #############################
@@ -177,7 +178,7 @@ def peak_vertical_grf(r: Rollout) -> np.ndarray:
         peaks = []
         for foot in range(r.foot_contact.shape[2]):
             for start, end in phases(r.foot_contact[robot, :, foot], stance=True):
-                peaks.append(np.max(r.foot_grf[robot, start:end, foot, 2]))
+                peaks.append(np.max(-r.foot_grf[robot, start:end, foot, 2]))  # upward force, see total_vertical_grf
         if peaks:
             peak_force[robot] = np.mean(peaks) / weight[robot]
     return peak_force
@@ -202,3 +203,32 @@ def action_rate(r: Rollout) -> np.ndarray:
 
 # TODO: add your own metrics, following the same convention (per step: (N, T),
 # per robot: (N,)). For example, how would you quantify base stability?
+
+
+def roll_pitch_per_step(r: Rollout) -> np.ndarray:
+    """Roll and pitch of the base at each step, in rad. Shape (N, T, 2)."""
+    w, x, y, z = np.moveaxis(r.base_quat, -1, 0)  # quaternion stored as (w, x, y, z)
+    roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x**2 + y**2))
+    pitch = np.arcsin(np.clip(2 * (w * y - z * x), -1, 1))
+    return np.stack([roll, pitch], axis=-1)
+
+
+def base_stability(r: Rollout) -> np.ndarray:
+    """Std of the base height (m) and RMS of roll and pitch (rad) of each robot. Shape (N, 3)."""
+    # Height around its own mean (no target height in the config); roll and pitch around 0, like body_tilt.
+    height_std = np.std(r.base_pos[..., 2], axis=1)
+    roll_pitch_rms = np.sqrt(np.mean(roll_pitch_per_step(r) ** 2, axis=1))
+    return np.column_stack([height_std, roll_pitch_rms])
+
+
+def action_hf_fraction(r: Rollout, cutoff_hz: float | np.ndarray = 5.0) -> np.ndarray:
+    """Fraction of the action power above cutoff_hz (mean removed, all joints). Shape (N,).
+    cutoff_hz: one value, or one per robot (e.g. 3.5 * stride_frequency(r)); NaN cutoff gives NaN.
+    Near 0: smooth actions; large: jitter that action_rate should penalize."""
+    a = r.action - r.action.mean(axis=1, keepdims=True)
+    power = (np.abs(np.fft.rfft(a, axis=1)) ** 2).sum(axis=2)  # (N, F), summed over joints
+    freqs = np.fft.rfftfreq(a.shape[1], r.dt)
+    cutoff = np.broadcast_to(np.asarray(cutoff_hz, dtype=float), (r.num_robots,))
+    above = (power * (freqs[None, :] > cutoff[:, None])).sum(axis=1)
+    total = power[:, 1:].sum(axis=1)
+    return np.divide(above, total, out=np.full(r.num_robots, np.nan), where=(total > 0) & np.isfinite(cutoff))
