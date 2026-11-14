@@ -1,0 +1,8 @@
+CHANGES TO BASELINE:
+
+Riccardo: - Change the angular velocity from (-0.1, 0.1) to (-0.25, 0.25);
+          - Change tracking reward standard deviation (check figure reward_std);
+
+
+
+
