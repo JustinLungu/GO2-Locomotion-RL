@@ -4,6 +4,7 @@ import numpy as np
 
 from lr_project.rollout import Rollout
 
+
 GRAVITY = 9.81  # m/s^2
 FOOT_RADIUS = 0.022  # m
 
@@ -232,3 +233,54 @@ def action_hf_fraction(r: Rollout, cutoff_hz: float | np.ndarray = 5.0) -> np.nd
     above = (power * (freqs[None, :] > cutoff[:, None])).sum(axis=1)
     total = power[:, 1:].sum(axis=1)
     return np.divide(above, total, out=np.full(r.num_robots, np.nan), where=(total > 0) & np.isfinite(cutoff))
+
+# ----------------------------------------------------------------------------------------------------------------------------
+def feet_air_time_per_step(r, threshold_min=0.05, threshold_max=0.5, command_threshold=0.5):
+    """Number of feet in the air for 0.05-0.5 s, only when the command is large enough (as mdp.feet_air_time)."""
+    air = np.zeros(r.foot_contact[:, 0].shape)
+    count = np.zeros(r.foot_contact.shape[:2])
+    for t in range(r.foot_contact.shape[1]):
+        air = np.where(r.foot_contact[:, t], 0.0, air + r.dt)
+        count[:, t] = np.sum((air > threshold_min) & (air < threshold_max), axis=-1)
+    moving = (np.linalg.norm(r.cmd[:, :2], axis=1) + np.abs(r.cmd[:, 2])) > command_threshold
+    return count * moving[:, None]
+
+def mean_raw_values(r):
+    """Mean raw value per step of each candidate reward term, as {name (unit): value}."""
+    w, x, y, z = np.moveaxis(r.base_quat, -1, 0)  # quaternion stored as (w, x, y, z)
+    raw = {  # name (unit): raw value per step, shape (N, T) or (N, T-1)
+        "body_linear_velocity (m²/s²)": r.base_lin_vel[..., 2] ** 2,
+        "body_angular_velocity (rad²/s²)": np.sum(r.base_ang_vel[..., :2] ** 2, axis=-1),
+        "body_tilt (-)": 4 * ((x * z - w * y) ** 2 + (y * z + w * x) ** 2),  # |projected gravity xy|^2
+        "action_rate (action²)": np.sum(np.diff(r.action, axis=1) ** 2, axis=-1),
+        "joint_torques (N²·m²)": np.sum(r.joint_torque ** 2, axis=-1),
+        "joint_power (W)": mechanical_power(r),
+        "joint_vel (rad²/s²)": np.sum(r.joint_vel ** 2, axis=-1),
+        "joint_acc (rad²/s⁴)": np.sum((np.diff(r.joint_vel, axis=1) / r.dt) ** 2, axis=-1),
+        "feet_air_time (feet)": feet_air_time_per_step(r),
+    }
+    return {name: np.mean(values) for name, values in raw.items()}
+
+# ----------------------------------------------------------------------------------------------------------------------------
+def iteration_at_90(iterations, values):
+    """First iteration where a curve has covered 90% of its rise to the final plateau (mean of the last 50 iterations)."""
+    plateau = np.mean(values[-50:])
+    return iterations[np.argmax(values >= values[0] + 0.9 * (plateau - values[0]))]
+
+# ----------------------------------------------------------------------------------------------------------------------------
+
+def per_command(cmd: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Mean and std of a per-robot value over the trials of each command.
+
+    cmd: command of each robot (vx, vy, yaw), shape (N, 3); values: one value per robot, shape (N,), same order.
+    Returns (commands (C, 3), mean (C,), std (C,)), commands sorted by vx, then vy, then yaw.
+    NaN for a command with no robot.
+    """
+    commands = np.unique(cmd, axis=0)
+    mean = np.full(len(commands), np.nan)
+    std = np.full(len(commands), np.nan)
+    for i, c in enumerate(commands):
+        trials = values[(cmd == c).all(axis=1)]
+        if len(trials):
+            mean[i], std[i] = trials.mean(), trials.std()
+    return commands, mean, std

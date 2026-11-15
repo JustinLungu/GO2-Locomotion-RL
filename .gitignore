@@ -13,3 +13,4 @@ wheels/
 .vscode
 
 # Training
+logs/
