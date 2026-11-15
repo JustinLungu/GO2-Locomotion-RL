@@ -1,0 +1,39 @@
+--- git commit ---
+c2ff0bbbfeb9376feed1c15737901a53123b8d54
+
+
+--- git status ---
+On branch flat_terrain
+Your branch is up to date with 'origin/flat_terrain'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   notebooks/01_flat_terrain.ipynb
+
+no changes added to commit (use "git add" and/or "git commit -a") 
+
+
+--- git diff ---
+diff --git a/notebooks/01_flat_terrain.ipynb b/notebooks/01_flat_terrain.ipynb
+index 0d3f7a2..b1626c1 100644
+--- a/notebooks/01_flat_terrain.ipynb
++++ b/notebooks/01_flat_terrain.ipynb
+@@ -398,7 +398,7 @@
+     "        \"track_linear_velocity\": RewardTermCfg(\n",
+     "            func=mdp.track_linear_velocity,\n",
+     "            weight=1.0,\n",
+-    "            params={\"command_name\": \"joystick\", \"std\": math.sqrt(0.25)},\n",
++    "            params={\"command_name\": \"joystick\", \"std\": math.sqrt(0.125)},\n",
+     "        ),\n",
+     "\n",
+     "        # Earn points for turning at the requested rate.\n",
+@@ -408,7 +408,7 @@
+     "        \"track_angular_velocity\": RewardTermCfg(\n",
+     "            func=mdp.track_angular_velocity,\n",
+     "            weight=1,\n",
+-    "            params={\"command_name\": \"joystick\", \"std\": math.sqrt(0.25)},\n",
++    "            params={\"command_name\": \"joystick\", \"std\": math.sqrt(0.125)},\n",
+     "        ),\n",
+     "\n",
+     "        # Earn a small bonus for lifting feet while movement is requested.\n",
