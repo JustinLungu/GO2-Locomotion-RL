@@ -207,3 +207,26 @@ def feet_air_time(
             reward *= scale
 
     return reward
+
+#--------------------------------------------------------------------------------------------------------------------------------------
+
+def joint_power_adaptive(
+    env: ManagerBasedRlEnv,
+    command_name: str,
+    ref_speed: float = 1.0,
+    min_speed: float = 0.3,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+    """Mechanical power (W) scaled by ref_speed / commanded planar speed.
+
+    Equal to the plain mechanical power when the command is ref_speed; weighs more for slower
+    commands and less for faster ones, so energy and tracking stay balanced across speeds.
+    """
+    asset: Entity = env.scene[asset_cfg.name]
+    tau = asset.data.qfrc_actuator[:, asset_cfg.joint_ids]
+    qd = asset.data.joint_vel[:, asset_cfg.joint_ids]
+    power = torch.sum(torch.abs(tau * qd), dim=1)
+    command = env.command_manager.get_command(command_name)
+    assert command is not None, f"Command '{command_name}' not found."
+    speed = torch.norm(command[:, :2], dim=1)
+    return power * ref_speed / torch.clamp(speed, min=min_speed)
