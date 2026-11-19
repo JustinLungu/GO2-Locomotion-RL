@@ -208,4 +208,17 @@ def feet_air_time(
 
     return reward
 
+def feet_clearance_flat(
+    env: ManagerBasedRlEnv,
+    target_height: float,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+    """|foot height - target| weighted by horizontal foot speed: only swinging feet pay."""
+    asset: Entity = env.scene[asset_cfg.name]
+    height = asset.data.site_pos_w[:, asset_cfg.site_ids, 2] - 0.022  # foot radius; flat plane only
+    speed = torch.norm(asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2], dim=-1)
+    return torch.sum(torch.abs(height - target_height) * speed, dim=1)
+
+
+
 
