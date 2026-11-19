@@ -208,6 +208,8 @@ def feet_air_time(
 
     return reward
 
+#---------------------------------------------------------------------------------------------------------------------
+
 def feet_clearance_flat(
     env: ManagerBasedRlEnv,
     target_height: float,
@@ -219,6 +221,20 @@ def feet_clearance_flat(
     speed = torch.norm(asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2], dim=-1)
     return torch.sum(torch.abs(height - target_height) * speed, dim=1)
 
-
-
-
+def stand_still_joint_deviation(
+    env: ManagerBasedRlEnv,
+    command_name: str,
+    command_threshold: float = 0.1,
+    asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+    """sum |q - q_default| (rad), only when the command is ~zero: holds the standing pose instead of crouching."""
+    asset: Entity = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command(command_name)
+    assert command is not None, f"Command '{command_name}' not found."
+    deviation = torch.sum(
+        torch.abs(asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]),
+        dim=1,
+    )
+    # Same gate as feet_air_time: linear + angular command magnitude.
+    standing = (torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])) < command_threshold
+    return deviation * standing.float()
