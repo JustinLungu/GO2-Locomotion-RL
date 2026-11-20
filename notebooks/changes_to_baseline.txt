@@ -1,8 +1,9 @@
-CHANGES TO BASELINE:
+THINKGS WE CAN TALK ABOUT:
 
-Riccardo: - Change the angular velocity from (-0.1, 0.1) to (-0.25, 0.25);
-          - Change tracking reward standard deviation (check figure reward_std);
+ -  # ACCELERATION (not used):
+    # joint acc: not measured on the Go2, double-differentiated encoders -> too noisy
+    # base acc: real IMU accelerometer; gravity can be removed in software, but the remaining acc_x, acc_y
+    #           are small, so even small impact spikes can hide them -> little usable information
+    # eventually: add mdp.builtin_sensor with scene.BASE_IMU_LIN_ACC as an addition experiment
 
-
-
-
+ - explain base_lin_vel only in the critic because it can not be measured on the real robot.

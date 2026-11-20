@@ -205,6 +205,19 @@ def action_rate(r: Rollout) -> np.ndarray:
 # TODO: add your own metrics, following the same convention (per step: (N, T),
 # per robot: (N,)). For example, how would you quantify base stability?
 
+def is_standing(r):
+    """(N,) True for robots commanded (0, 0, 0)."""
+    return np.all(r.cmd == 0, axis=1)
+
+def tilt_rms(r):
+    """(N,) RMS of the base tilt sqrt(roll² + pitch²) (deg)."""
+    roll_pitch = roll_pitch_per_step(r)
+    return np.degrees(np.sqrt(np.mean(np.sum(roll_pitch**2, axis=-1), axis=1)))
+
+def per_vx(r, values):
+    """Per-robot values grouped by vx command: (sorted vx values, list of arrays)."""
+    vxs = np.unique(r.cmd[:, 0])
+    return vxs, [values[r.cmd[:, 0] == vx] for vx in vxs]
 
 def roll_pitch_per_step(r: Rollout) -> np.ndarray:
     """Roll and pitch of the base at each step, in rad. Shape (N, T, 2)."""
@@ -213,7 +226,6 @@ def roll_pitch_per_step(r: Rollout) -> np.ndarray:
     pitch = np.arcsin(np.clip(2 * (w * y - z * x), -1, 1))
     return np.stack([roll, pitch], axis=-1)
 
-
 def base_stability(r: Rollout) -> np.ndarray:
     """Std of the base height (m) and RMS of roll and pitch (rad) of each robot. Shape (N, 3)."""
     # Height around its own mean (no target height in the config); roll and pitch around 0, like body_tilt.
@@ -221,23 +233,17 @@ def base_stability(r: Rollout) -> np.ndarray:
     roll_pitch_rms = np.sqrt(np.mean(roll_pitch_per_step(r) ** 2, axis=1))
     return np.column_stack([height_std, roll_pitch_rms])
 
-# ----------------------------------------------------------------------------------------------------------------------------
-def feet_air_time_per_step(r, threshold_min=0.05, threshold_max=0.5, command_threshold=0.5):
-    """Number of feet in the air for 0.05-0.5 s, only when the command is large enough (as mdp.feet_air_time)."""
-    air = np.zeros(r.foot_contact[:, 0].shape)
-    count = np.zeros(r.foot_contact.shape[:2])
-    for t in range(r.foot_contact.shape[1]):
-        air = np.where(r.foot_contact[:, t], 0.0, air + r.dt)
-        count[:, t] = np.sum((air > threshold_min) & (air < threshold_max), axis=-1)
-    moving = (np.linalg.norm(r.cmd[:, :2], axis=1) + np.abs(r.cmd[:, 2])) > command_threshold
-    return count * moving[:, None]
+def diagonal_pair_agreement(r):
+    """(N,) fraction of steps where FL-RR and FR-RL have the same contact state (1 = perfect trot)."""
+    contact = r.foot_contact
+    fl_rr = np.mean(contact[..., 0] == contact[..., 3], axis=1)
+    fr_rl = np.mean(contact[..., 1] == contact[..., 2], axis=1)
+    return (fl_rr + fr_rl) / 2
 
-
-# ----------------------------------------------------------------------------------------------------------------------------
 def iteration_at_90(iterations, values):
     """First iteration where a curve has covered 90% of its rise to the final plateau (mean of the last 50 iterations)."""
     plateau = np.mean(values[-50:])
     return iterations[np.argmax(values >= values[0] + 0.9 * (plateau - values[0]))]
 
-# ----------------------------------------------------------------------------------------------------------------------------
+
 
