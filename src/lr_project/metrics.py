@@ -209,6 +209,13 @@ def is_standing(r):
     """(N,) True for robots commanded (0, 0, 0)."""
     return np.all(r.cmd == 0, axis=1)
 
+def roll_pitch_per_step(r: Rollout) -> np.ndarray:
+    """Roll and pitch of the base at each step, in rad. Shape (N, T, 2)."""
+    w, x, y, z = np.moveaxis(r.base_quat, -1, 0)  # quaternion stored as (w, x, y, z)
+    roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x**2 + y**2))
+    pitch = np.arcsin(np.clip(2 * (w * y - z * x), -1, 1))
+    return np.stack([roll, pitch], axis=-1)
+
 def tilt_rms(r):
     """(N,) RMS of the base tilt sqrt(roll² + pitch²) (deg)."""
     roll_pitch = roll_pitch_per_step(r)
@@ -218,13 +225,6 @@ def per_vx(r, values):
     """Per-robot values grouped by vx command: (sorted vx values, list of arrays)."""
     vxs = np.unique(r.cmd[:, 0])
     return vxs, [values[r.cmd[:, 0] == vx] for vx in vxs]
-
-def roll_pitch_per_step(r: Rollout) -> np.ndarray:
-    """Roll and pitch of the base at each step, in rad. Shape (N, T, 2)."""
-    w, x, y, z = np.moveaxis(r.base_quat, -1, 0)  # quaternion stored as (w, x, y, z)
-    roll = np.arctan2(2 * (w * x + y * z), 1 - 2 * (x**2 + y**2))
-    pitch = np.arcsin(np.clip(2 * (w * y - z * x), -1, 1))
-    return np.stack([roll, pitch], axis=-1)
 
 def base_stability(r: Rollout) -> np.ndarray:
     """Std of the base height (m) and RMS of roll and pitch (rad) of each robot. Shape (N, 3)."""
