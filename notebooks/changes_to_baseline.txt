@@ -1,4 +1,4 @@
-THINKGS WE CAN TALK ABOUT:
+THINGS WE CAN TALK ABOUT:
 
  -  # ACCELERATION (not used):
     # joint acc: not measured on the Go2, double-differentiated encoders -> too noisy
@@ -7,3 +7,19 @@ THINKGS WE CAN TALK ABOUT:
     # eventually: add mdp.builtin_sensor with scene.BASE_IMU_LIN_ACC as an addition experiment
 
  - explain base_lin_vel only in the critic because it can not be measured on the real robot.
+
+
+
+QUESTIONS:
+
+- Adding reward terms;
+- Experiment;
+- Changing the experiment code to accomodate for different seeds;
+
+
+
+
+
+
+
+
